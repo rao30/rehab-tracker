@@ -43,7 +43,8 @@ export default function RegisterPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <h1 className="text-2xl font-bold text-slate-900">Create your account</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Set up as a property owner to manage renovations
+            Set up as a property owner — upload your contract and AI builds your draw
+            schedule automatically.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
