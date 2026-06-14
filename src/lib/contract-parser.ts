@@ -305,7 +305,7 @@ export async function parseContractWithGemini(text: string): Promise<ParsedContr
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+      model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
       generationConfig: { responseMimeType: "application/json" },
     });
 
