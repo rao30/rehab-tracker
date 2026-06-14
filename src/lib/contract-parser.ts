@@ -370,8 +370,11 @@ export async function parseContract(text: string): Promise<ParsedContract> {
 }
 
 export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
+  // Import lib directly — pdf-parse/index.js runs debug code when bundled (no module.parent)
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+  const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (
+    buf: Buffer
+  ) => Promise<{ text: string }>;
   const data = await pdfParse(buffer);
   return data.text;
 }
