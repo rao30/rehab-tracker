@@ -1,19 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check, UserPlus } from "lucide-react";
+import { Copy, Check, UserPlus, Mail } from "lucide-react";
 
 export function InviteContractor({ projectId }: { projectId: string }) {
   const [email, setEmail] = useState("");
   const [inviteUrl, setInviteUrl] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
 
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setWarning("");
+    setEmailSent(false);
 
     const res = await fetch(`/api/projects/${projectId}/invite`, {
       method: "POST",
@@ -23,12 +27,22 @@ export function InviteContractor({ projectId }: { projectId: string }) {
     const data = await res.json();
 
     if (!res.ok) {
-      setError(data.error || "Failed to create invite");
+      setError(data.error || "Failed to send invite");
       setLoading(false);
       return;
     }
 
     setInviteUrl(data.inviteUrl);
+    setEmailSent(Boolean(data.emailSent));
+
+    if (!data.emailSent) {
+      setWarning(
+        data.emailError
+          ? `Invite created, but the email could not be sent (${data.emailError}). Copy the link below to share manually.`
+          : "Invite created. Copy the link below to share manually."
+      );
+    }
+
     setLoading(false);
   }
 
@@ -45,7 +59,8 @@ export function InviteContractor({ projectId }: { projectId: string }) {
         <h3 className="font-semibold text-slate-900">Invite your contractor</h3>
       </div>
       <p className="mt-1 text-sm text-slate-600">
-        Send Jesse (or any contractor) a link to join this project and submit draw requests.
+        We&apos;ll email your contractor a link to join this project and submit draw requests.
+        If they already use RenovateFlow as a property owner, they can accept with the same account.
       </p>
 
       <form onSubmit={sendInvite} className="mt-4 flex gap-2">
@@ -62,11 +77,20 @@ export function InviteContractor({ projectId }: { projectId: string }) {
           disabled={loading}
           className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
         >
-          Create invite
+          Send invite
         </button>
       </form>
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      {emailSent && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>Invite email sent to {email}.</p>
+        </div>
+      )}
+
+      {warning && <p className="mt-2 text-sm text-amber-700">{warning}</p>}
 
       {inviteUrl && (
         <div className="mt-4 rounded-lg bg-slate-50 p-3">

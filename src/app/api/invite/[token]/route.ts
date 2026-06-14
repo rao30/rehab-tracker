@@ -11,16 +11,24 @@ export async function GET(
 
   const invite = await prisma.projectInvite.findUnique({
     where: { token },
-    include: { project: { select: { name: true } } },
+    include: { project: { select: { name: true, ownerId: true } } },
   });
 
   if (!invite || invite.usedAt || invite.expiresAt < new Date()) {
     return NextResponse.json({ error: "Invalid or expired invite" }, { status: 400 });
   }
 
+  const existingUser = await prisma.user.findUnique({
+    where: { email: invite.email },
+    select: { role: true, name: true },
+  });
+
   return NextResponse.json({
     email: invite.email,
     projectName: invite.project.name,
+    existingAccount: Boolean(existingUser),
+    accountRole: existingUser?.role ?? null,
+    existingName: existingUser?.name ?? null,
   });
 }
 
@@ -55,11 +63,32 @@ export async function POST(
         passwordHash: await hashPassword(password),
       },
     });
-  } else if (password) {
+  } else {
+    if (!password) {
+      return NextResponse.json(
+        { error: "Enter your existing account password to accept this invite" },
+        { status: 400 }
+      );
+    }
+
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
       return NextResponse.json({ error: "Invalid password" }, { status: 401 });
     }
+
+    if (name && name !== user.name) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { name },
+      });
+    }
+  }
+
+  if (invite.project.ownerId === user.id) {
+    return NextResponse.json(
+      { error: "You cannot be the contractor on your own project" },
+      { status: 400 }
+    );
   }
 
   await prisma.$transaction([

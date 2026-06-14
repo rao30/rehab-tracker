@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 import { ContractUpload } from "@/components/ContractUpload";
 import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getProjectsForUser } from "@/lib/user-projects";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Building2, ArrowRight } from "lucide-react";
 
@@ -11,26 +11,9 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const projects =
-    user.role === "OWNER"
-      ? await prisma.project.findMany({
-          where: { ownerId: user.id },
-          include: {
-            contractor: { select: { name: true } },
-            units: true,
-            milestones: true,
-          },
-          orderBy: { createdAt: "desc" },
-        })
-      : await prisma.project.findMany({
-          where: { contractorId: user.id },
-          include: {
-            owner: { select: { name: true } },
-            units: true,
-            milestones: true,
-          },
-          orderBy: { createdAt: "desc" },
-        });
+  const projects = await getProjectsForUser(user.id);
+  const ownedCount = projects.filter((project) => project.ownerId === user.id).length;
+  const contractorCount = projects.filter((project) => project.contractorId === user.id).length;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -40,9 +23,11 @@ export default async function DashboardPage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
             <p className="mt-1 text-slate-600">
-              {user.role === "OWNER"
-                ? "Manage your renovation projects and payments"
-                : "View projects and submit draw requests"}
+              {ownedCount > 0 && contractorCount > 0
+                ? "Manage your projects and contractor assignments"
+                : user.role === "OWNER"
+                  ? "Manage your renovation projects and payments"
+                  : "View projects and submit draw requests"}
             </p>
           </div>
         </div>
@@ -68,39 +53,59 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {projects.map((project) => (
-                <Link
-                  key={project.id}
-                  href={`/projects/${project.id}`}
-                  className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:border-brand-300 hover:shadow-md transition-all"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-slate-900 group-hover:text-brand-700">
-                        {project.name}
-                      </h3>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {project.units.length} unit(s) · {project.milestones.length} milestones
-                      </p>
+              {projects.map((project) => {
+                const isOwner = project.ownerId === user.id;
+                const isContractor = project.contractorId === user.id;
+
+                return (
+                  <Link
+                    key={project.id}
+                    href={`/projects/${project.id}`}
+                    className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:border-brand-300 hover:shadow-md transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-slate-900 group-hover:text-brand-700">
+                            {project.name}
+                          </h3>
+                          {isOwner && isContractor ? (
+                            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
+                              Owner & contractor
+                            </span>
+                          ) : isOwner ? (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                              Owner
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                              Contractor
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {project.units.length} unit(s) · {project.milestones.length} milestones
+                        </p>
+                      </div>
+                      <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-brand-500 transition-colors" />
                     </div>
-                    <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-brand-500 transition-colors" />
-                  </div>
-                  <div className="mt-4 flex items-center justify-between text-sm">
-                    <span className="font-medium text-brand-700">
-                      {formatCurrency(Number(project.totalBudget))}
-                    </span>
-                    <span className="text-slate-500">{formatDate(project.createdAt)}</span>
-                  </div>
-                  {"contractor" in project && project.contractor && (
-                    <p className="mt-2 text-xs text-slate-500">
-                      Contractor: {project.contractor.name}
-                    </p>
-                  )}
-                  {"owner" in project && project.owner && (
-                    <p className="mt-2 text-xs text-slate-500">Owner: {project.owner.name}</p>
-                  )}
-                </Link>
-              ))}
+                    <div className="mt-4 flex items-center justify-between text-sm">
+                      <span className="font-medium text-brand-700">
+                        {formatCurrency(Number(project.totalBudget))}
+                      </span>
+                      <span className="text-slate-500">{formatDate(project.createdAt)}</span>
+                    </div>
+                    {isOwner && project.contractor && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Contractor: {project.contractor.name}
+                      </p>
+                    )}
+                    {isContractor && project.owner && (
+                      <p className="mt-2 text-xs text-slate-500">Owner: {project.owner.name}</p>
+                    )}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>
