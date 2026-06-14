@@ -139,8 +139,7 @@ export function ContractUpload() {
         </button>
 
         <p className="text-center text-xs text-slate-500">
-          Uses smart contract parsing. Optional Claude AI enhancement when{" "}
-          <code className="rounded bg-slate-100 px-1">ANTHROPIC_API_KEY</code> is configured.
+          Powered by Gemini AI for contract comprehension, with rule-based fallback.
         </p>
       </form>
     </div>
