@@ -138,9 +138,6 @@ export function ContractUpload() {
           )}
         </button>
 
-        <p className="text-center text-xs text-slate-500">
-          Powered by Gemini AI for contract comprehension, with rule-based fallback.
-        </p>
       </form>
     </div>
   );

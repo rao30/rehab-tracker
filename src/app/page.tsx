@@ -2,11 +2,11 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 import { getCurrentUser } from "@/lib/auth";
 import {
-  FileText,
   Camera,
   CheckCircle2,
   DollarSign,
   ArrowRight,
+  Sparkles,
 } from "lucide-react";
 
 export default async function HomePage() {
@@ -33,10 +33,10 @@ export default async function HomePage() {
 
   const features = [
     {
-      icon: FileText,
-      title: "Upload your contract",
+      icon: Sparkles,
+      title: "AI reads your contract",
       description:
-        "Drop your PDF and we auto-generate a milestone payment checklist from the draw schedule.",
+        "Upload your PDF and our AI comprehends the draw schedule to build your milestone payment checklist automatically.",
     },
     {
       icon: Camera,
@@ -73,8 +73,9 @@ export default async function HomePage() {
               <span className="block text-brand-600">without the spreadsheet chaos</span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-600">
-              Upload your contractor agreement, auto-build your payment checklist, and run
-              draw requests from demo to final punch list — all in one place.
+              Upload your contractor agreement and let AI-powered contract comprehension
+              create your draw schedule and payment checklist — then run draw requests from
+              demo to final punch list, all in one place.
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link
