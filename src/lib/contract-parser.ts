@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export interface ParsedUnit {
   name: string;
@@ -24,7 +25,7 @@ export interface ParsedContract {
   mobilizationAdvance?: number;
   units: ParsedUnit[];
   milestones: ParsedMilestone[];
-  parsingMethod: "ai" | "rules";
+  parsingMethod: "rules" | "gemini" | "claude";
   confidence: "high" | "medium" | "low";
 }
 
@@ -265,7 +266,63 @@ const CONTRACT_SCHEMA = `{
   }]
 }`;
 
-export async function parseContractWithAI(text: string): Promise<ParsedContract> {
+const CONTRACT_PROMPT = `You are a construction contract analyst. Extract payment milestones and project structure from this renovation contract.
+
+Return ONLY valid JSON matching this schema (no markdown, no explanation):
+${CONTRACT_SCHEMA}
+
+Rules:
+- Extract every milestone/draw phase with exact dollar amounts
+- Include mobilization/advance payments with isAdvance: true
+- Split units/properties if the contract covers multiple addresses
+- description should summarize scope required before payment release
+- Use orderIndex starting at 1`;
+
+function parseAIResponse(
+  raw: string,
+  method: "gemini" | "claude"
+): ParsedContract | null {
+  try {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]) as Omit<ParsedContract, "parsingMethod" | "confidence">;
+    return {
+      ...parsed,
+      parsingMethod: method,
+      confidence: parsed.milestones?.length > 0 ? "high" : "medium",
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function parseContractWithGemini(text: string): Promise<ParsedContract> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return parseContractWithRules(text);
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
+      generationConfig: { responseMimeType: "application/json" },
+    });
+
+    const result = await model.generateContent(
+      `${CONTRACT_PROMPT}\n\nContract text:\n${text.slice(0, 28000)}`
+    );
+    const response = result.response.text();
+    const parsed = parseAIResponse(response, "gemini");
+    if (parsed) return parsed;
+  } catch (error) {
+    console.error("Gemini contract parsing failed:", error);
+  }
+
+  return parseContractWithRules(text);
+}
+
+export async function parseContractWithClaude(text: string): Promise<ParsedContract> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return parseContractWithRules(text);
@@ -279,20 +336,7 @@ export async function parseContractWithAI(text: string): Promise<ParsedContract>
     messages: [
       {
         role: "user",
-        content: `You are a construction contract analyst. Extract payment milestones and project structure from this renovation contract.
-
-Return ONLY valid JSON matching this schema (no markdown, no explanation):
-${CONTRACT_SCHEMA}
-
-Rules:
-- Extract every milestone/draw phase with exact dollar amounts
-- Include mobilization/advance payments with isAdvance: true
-- Split units/properties if the contract covers multiple addresses
-- description should summarize scope required before payment release
-- Use orderIndex starting at 1
-
-Contract text:
-${text.slice(0, 28000)}`,
+        content: `${CONTRACT_PROMPT}\n\nContract text:\n${text.slice(0, 28000)}`,
       },
     ],
   });
@@ -302,37 +346,35 @@ ${text.slice(0, 28000)}`,
     return parseContractWithRules(text);
   }
 
-  try {
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON found");
-    const parsed = JSON.parse(jsonMatch[0]) as Omit<ParsedContract, "parsingMethod" | "confidence">;
-    return {
-      ...parsed,
-      parsingMethod: "ai",
-      confidence: parsed.milestones?.length > 0 ? "high" : "medium",
-    };
-  } catch {
-    return parseContractWithRules(text);
-  }
+  const parsed = parseAIResponse(content.text, "claude");
+  if (parsed) return parsed;
+
+  return parseContractWithRules(text);
 }
 
 export async function parseContract(text: string): Promise<ParsedContract> {
-  const rulesResult = parseContractWithRules(text);
+  if (process.env.GEMINI_API_KEY) {
+    return parseContractWithGemini(text);
+  }
 
+  const rulesResult = parseContractWithRules(text);
   if (rulesResult.confidence === "high" && rulesResult.milestones.length >= 3) {
     return rulesResult;
   }
 
   if (process.env.ANTHROPIC_API_KEY) {
-    return parseContractWithAI(text);
+    return parseContractWithClaude(text);
   }
 
   return rulesResult;
 }
 
 export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
+  // Import lib directly — pdf-parse/index.js runs debug code when bundled (no module.parent)
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+  const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (
+    buf: Buffer
+  ) => Promise<{ text: string }>;
   const data = await pdfParse(buffer);
   return data.text;
 }
