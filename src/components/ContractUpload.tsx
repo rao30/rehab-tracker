@@ -115,7 +115,7 @@ export function ContractUpload() {
             </div>
             <p className="mt-2 text-sm text-emerald-700">
               {preview.projectName} — {preview.milestones} milestones across{" "}
-              {preview.units} unit(s). Redirecting...
+              {preview.units} unit(s). You can review and edit the schedule next.
             </p>
           </div>
         )}

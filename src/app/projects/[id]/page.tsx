@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { DrawRequestPanel } from "@/components/DrawRequestPanel";
 import { DrawReviewPanel } from "@/components/DrawReviewPanel";
 import { InviteContractor } from "@/components/InviteContractor";
+import { DrawScheduleEditor } from "@/components/DrawScheduleEditor";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ArrowLeft, FileText, Loader2 } from "lucide-react";
 
@@ -19,6 +20,15 @@ interface ProjectData {
   contractFile?: string | null;
   owner: { name: string; email: string };
   contractor?: { name: string; email: string } | null;
+  milestones?: {
+    id: string;
+    orderIndex: number;
+    name: string;
+    description: string;
+    amountPerUnit: number | string;
+    totalAmount: number | string;
+    isAdvance: boolean;
+  }[];
   units: {
     id: string;
     name: string;
@@ -29,6 +39,7 @@ interface ProjectData {
       id: string;
       status: string;
       milestone: {
+        id?: string;
         orderIndex: number;
         name: string;
         description: string;
@@ -109,6 +120,30 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
   const isContractor = user.role === "CONTRACTOR";
   const activeUnit = project.units.find((u) => u.id === selectedUnit) || project.units[0];
 
+  const lockedIds = new Set<string>();
+  for (const unit of project.units) {
+    for (const um of unit.unitMilestones) {
+      const hasActiveDraw = um.drawRequests.some((dr) => dr.status !== "DRAFT");
+      const isActive =
+        ["SUBMITTED", "APPROVED", "PAID"].includes(um.status) || hasActiveDraw;
+      if (isActive && um.milestone.id) {
+        lockedIds.add(um.milestone.id);
+      }
+    }
+  }
+
+  const scheduleMilestones =
+    project.milestones ||
+    (project.units[0]?.unitMilestones.map((um) => ({
+      id: um.milestone.id || String(um.milestone.orderIndex),
+      orderIndex: um.milestone.orderIndex,
+      name: um.milestone.name,
+      description: um.milestone.description,
+      amountPerUnit: um.milestone.amountPerUnit,
+      totalAmount: Number(um.milestone.amountPerUnit) * project.units.length,
+      isAdvance: false,
+    })) ?? []);
+
   const paidTotal = project.units.reduce((sum, unit) => {
     return (
       sum +
@@ -177,6 +212,17 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
           <div className="mt-8">
             <InviteContractor projectId={project.id} />
           </div>
+        )}
+
+        {isOwner && scheduleMilestones.length > 0 && (
+          <DrawScheduleEditor
+            projectId={project.id}
+            milestones={scheduleMilestones}
+            lockedMilestoneIds={Array.from(lockedIds)}
+            unitCount={project.units.length}
+            totalBudget={Number(project.totalBudget)}
+            onUpdate={loadProject}
+          />
         )}
 
         {project.units.length > 1 && (
