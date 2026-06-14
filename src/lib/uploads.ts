@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
+import { optimizePhoto } from "./image-processing";
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 
@@ -19,13 +20,24 @@ export async function saveContractFile(buffer: Buffer, originalName: string) {
   return filename;
 }
 
-export async function savePhotoFile(buffer: Buffer, originalName: string) {
+export interface SavedPhoto {
+  filename: string;
+  originalBytes: number;
+  optimizedBytes: number;
+}
+
+/** Compress to WebP, resize, and store. Returns storage stats for logging. */
+export async function savePhotoFile(buffer: Buffer): Promise<SavedPhoto> {
   await ensureUploadDir();
-  const ext = path.extname(originalName) || ".jpg";
-  const filename = `${randomUUID()}${ext}`;
+  const optimized = await optimizePhoto(buffer);
+  const filename = `${randomUUID()}.webp`;
   const filepath = path.join(UPLOAD_DIR, "photos", filename);
-  await writeFile(filepath, buffer);
-  return filename;
+  await writeFile(filepath, optimized.buffer);
+  return {
+    filename,
+    originalBytes: optimized.originalBytes,
+    optimizedBytes: optimized.optimizedBytes,
+  };
 }
 
 export function getUploadPath(type: "contracts" | "photos", filename: string) {

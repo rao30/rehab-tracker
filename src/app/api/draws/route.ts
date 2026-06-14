@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  isAllowedPhotoMimeType,
+  MAX_PHOTOS_PER_DRAW,
+  MAX_PHOTO_UPLOAD_BYTES,
+} from "@/lib/image-processing";
 import { savePhotoFile } from "@/lib/uploads";
 import { unlockNextMilestone } from "@/lib/project-service";
 
@@ -79,18 +84,51 @@ export async function POST(request: NextRequest) {
     }
 
     const photoFiles = formData.getAll("photos") as File[];
-    for (const photo of photoFiles) {
-      if (photo.size > 0) {
-        const buffer = Buffer.from(await photo.arrayBuffer());
-        const filename = await savePhotoFile(buffer, photo.name);
-        await prisma.drawPhoto.create({
-          data: {
-            drawRequestId: draw.id,
-            filename,
-            caption: photo.name,
-          },
-        });
+    const validPhotos = photoFiles.filter((photo) => photo.size > 0);
+
+    if (validPhotos.length > MAX_PHOTOS_PER_DRAW) {
+      return NextResponse.json(
+        { error: `Maximum ${MAX_PHOTOS_PER_DRAW} photos per draw request` },
+        { status: 400 }
+      );
+    }
+
+    const existingPhotoCount = await prisma.drawPhoto.count({
+      where: { drawRequestId: draw.id },
+    });
+
+    if (existingPhotoCount + validPhotos.length > MAX_PHOTOS_PER_DRAW) {
+      return NextResponse.json(
+        { error: `Maximum ${MAX_PHOTOS_PER_DRAW} photos per draw request` },
+        { status: 400 }
+      );
+    }
+
+    for (const photo of validPhotos) {
+      if (photo.size > MAX_PHOTO_UPLOAD_BYTES) {
+        return NextResponse.json(
+          { error: `Each photo must be under ${MAX_PHOTO_UPLOAD_BYTES / (1024 * 1024)} MB` },
+          { status: 400 }
+        );
       }
+
+      const mimeType = photo.type || "application/octet-stream";
+      if (!isAllowedPhotoMimeType(mimeType)) {
+        return NextResponse.json(
+          { error: "Only image files (JPEG, PNG, WebP, HEIC) are allowed" },
+          { status: 400 }
+        );
+      }
+
+      const buffer = Buffer.from(await photo.arrayBuffer());
+      const saved = await savePhotoFile(buffer);
+      await prisma.drawPhoto.create({
+        data: {
+          drawRequestId: draw.id,
+          filename: saved.filename,
+          caption: photo.name,
+        },
+      });
     }
 
     if (submit) {
