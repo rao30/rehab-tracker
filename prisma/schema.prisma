@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  CONTRACTOR
+}
+
+enum DrawStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum MilestoneUnitStatus {
+  LOCKED
+  READY
+  SUBMITTED
+  APPROVED
+  PAID
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(OWNER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedProjects      Project[]     @relation("ProjectOwner")
+  contractorProjects Project[]     @relation("ProjectContractor")
+  drawRequests       DrawRequest[] @relation("DrawRequester")
+  reviewedDraws      DrawRequest[] @relation("DrawReviewer")
+  recordedPayments   Payment[]
+}
+
+model Project {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  ownerId         String
+  contractorId    String?
+  contractFile    String?
+  contractText    String?  @db.Text
+  totalBudget     Decimal  @db.Decimal(12, 2)
+  mobilizationAdvance Decimal? @db.Decimal(12, 2)
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  owner      User        @relation("ProjectOwner", fields: [ownerId], references: [id])
+  contractor User?       @relation("ProjectContractor", fields: [contractorId], references: [id])
+  units      Unit[]
+  milestones Milestone[]
+  invites    ProjectInvite[]
+}
+
+model ProjectInvite {
+  id        String   @id @default(cuid())
+  projectId String
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Unit {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  address   String?
+  budget    Decimal  @db.Decimal(12, 2)
+  deadline  DateTime?
+  createdAt DateTime @default(now())
+
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unitMilestones   UnitMilestone[]
+}
+
+model Milestone {
+  id              String   @id @default(cuid())
+  projectId       String
+  orderIndex      Int
+  name            String
+  description     String   @db.Text
+  amountPerUnit   Decimal  @db.Decimal(12, 2)
+  totalAmount     Decimal  @db.Decimal(12, 2)
+  isAdvance       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unitMilestones UnitMilestone[]
+}
+
+model UnitMilestone {
+  id          String              @id @default(cuid())
+  unitId      String
+  milestoneId String
+  status      MilestoneUnitStatus @default(LOCKED)
+  updatedAt   DateTime            @updatedAt
+
+  unit         Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  milestone    Milestone     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  drawRequests DrawRequest[]
+
+  @@unique([unitId, milestoneId])
+}
+
+model DrawRequest {
+  id              String     @id @default(cuid())
+  unitMilestoneId String
+  requesterId     String
+  reviewerId      String?
+  amount          Decimal    @db.Decimal(12, 2)
+  status          DrawStatus @default(DRAFT)
+  contractorNotes String?    @db.Text
+  ownerNotes      String?    @db.Text
+  submittedAt     DateTime?
+  reviewedAt      DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  unitMilestone UnitMilestone @relation(fields: [unitMilestoneId], references: [id], onDelete: Cascade)
+  requester     User          @relation("DrawRequester", fields: [requesterId], references: [id])
+  reviewer      User?         @relation("DrawReviewer", fields: [reviewerId], references: [id])
+  photos        DrawPhoto[]
+  payment       Payment?
+}
+
+model DrawPhoto {
+  id            String   @id @default(cuid())
+  drawRequestId String
+  filename      String
+  caption       String?
+  createdAt     DateTime @default(now())
+
+  drawRequest DrawRequest @relation(fields: [drawRequestId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  drawRequestId String   @unique
+  recordedById  String
+  amount        Decimal  @db.Decimal(12, 2)
+  method        String
+  reference     String?
+  notes         String?
+  paidAt        DateTime @default(now())
+
+  drawRequest DrawRequest @relation(fields: [drawRequestId], references: [id], onDelete: Cascade)
+  recordedBy  User        @relation(fields: [recordedById], references: [id])
+}
