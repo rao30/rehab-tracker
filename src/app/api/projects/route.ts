@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getProjectsForUser } from "@/lib/user-projects";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -8,27 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const projects =
-    user.role === "OWNER"
-      ? await prisma.project.findMany({
-          where: { ownerId: user.id },
-          include: {
-            contractor: { select: { id: true, name: true, email: true } },
-            units: true,
-            milestones: { orderBy: { orderIndex: "asc" } },
-            _count: { select: { milestones: true } },
-          },
-          orderBy: { createdAt: "desc" },
-        })
-      : await prisma.project.findMany({
-          where: { contractorId: user.id },
-          include: {
-            owner: { select: { id: true, name: true, email: true } },
-            units: true,
-            milestones: { orderBy: { orderIndex: "asc" } },
-          },
-          orderBy: { createdAt: "desc" },
-        });
+  const projects = await getProjectsForUser(user.id);
 
   return NextResponse.json({ projects });
 }

@@ -6,9 +6,17 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Loader2, Hammer } from "lucide-react";
 
+type InviteDetails = {
+  email: string;
+  projectName: string;
+  existingAccount: boolean;
+  accountRole: "OWNER" | "CONTRACTOR" | null;
+  existingName: string | null;
+};
+
 export default function InvitePage({ params }: { params: { token: string } }) {
   const router = useRouter();
-  const [invite, setInvite] = useState<{ email: string; projectName: string } | null>(null);
+  const [invite, setInvite] = useState<InviteDetails | null>(null);
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -23,6 +31,9 @@ export default function InvitePage({ params }: { params: { token: string } }) {
           setError(data.error);
         } else {
           setInvite(data);
+          if (data.existingName) {
+            setName(data.existingName);
+          }
         }
         setLoading(false);
       });
@@ -58,6 +69,8 @@ export default function InvitePage({ params }: { params: { token: string } }) {
     );
   }
 
+  const isExistingOwner = invite?.existingAccount && invite.accountRole === "OWNER";
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Header user={null} />
@@ -86,20 +99,38 @@ export default function InvitePage({ params }: { params: { token: string } }) {
               </p>
               <p className="mt-1 text-xs text-slate-500">{invite.email}</p>
 
+              {isExistingOwner ? (
+                <p className="mt-4 rounded-lg bg-brand-50 px-4 py-3 text-left text-sm text-brand-800">
+                  You already have a RenovateFlow owner account with this email. Sign in with your
+                  existing password to join as the contractor on this project. Your owner projects
+                  will stay on your dashboard.
+                </p>
+              ) : invite.existingAccount ? (
+                <p className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-left text-sm text-slate-600">
+                  Sign in with your existing RenovateFlow password to accept this invite.
+                </p>
+              ) : (
+                <p className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-left text-sm text-slate-600">
+                  Create your contractor account to accept this invite.
+                </p>
+              )}
+
               <form onSubmit={handleSubmit} className="mt-8 space-y-4 text-left">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Your name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"
-                  />
-                </div>
+                {!invite.existingAccount && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Your name</label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-slate-700">
-                    Password {invite ? "(create or enter existing)" : ""}
+                    {invite.existingAccount ? "Password" : "Create a password"}
                   </label>
                   <input
                     type="password"
@@ -121,7 +152,7 @@ export default function InvitePage({ params }: { params: { token: string } }) {
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
                 >
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Accept & join project
+                  {invite.existingAccount ? "Sign in & join project" : "Create account & join project"}
                 </button>
               </form>
             </>

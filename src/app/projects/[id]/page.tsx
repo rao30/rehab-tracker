@@ -19,8 +19,8 @@ interface ProjectData {
   totalBudget: number | string;
   mobilizationAdvance?: number | string | null;
   contractFile?: string | null;
-  owner: { name: string; email: string };
-  contractor?: { name: string; email: string } | null;
+  owner: { id: string; name: string; email: string };
+  contractor?: { id: string; name: string; email: string } | null;
   milestones?: {
     id: string;
     orderIndex: number;
@@ -63,7 +63,7 @@ interface ProjectData {
 export default function ProjectPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [project, setProject] = useState<ProjectData | null>(null);
-  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; name: string; role: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedUnit, setSelectedUnit] = useState<string>("");
 
@@ -117,8 +117,8 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
     );
   }
 
-  const isOwner = user.role === "OWNER";
-  const isContractor = user.role === "CONTRACTOR";
+  const isOwner = user.id === project.owner.id;
+  const isContractor = project.contractor?.id === user.id;
   const activeUnit = project.units.find((u) => u.id === selectedUnit) || project.units[0];
 
   const lockedIds = new Set<string>();
