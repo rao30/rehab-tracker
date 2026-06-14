@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DrawRequestPanel } from "@/components/DrawRequestPanel";
 import { DrawReviewPanel } from "@/components/DrawReviewPanel";
+import { ManualPaymentPanel } from "@/components/ManualPaymentPanel";
 import { InviteContractor } from "@/components/InviteContractor";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ArrowLeft, FileText, Loader2 } from "lucide-react";
@@ -218,6 +219,14 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
                   latestDraw &&
                   ["SUBMITTED", "APPROVED", "PAID"].includes(latestDraw.status);
 
+                const showManualPay =
+                  isOwner &&
+                  ["READY", "APPROVED"].includes(um.status) &&
+                  !(
+                    latestDraw &&
+                    ["SUBMITTED", "APPROVED"].includes(latestDraw.status)
+                  );
+
                 return (
                   <div
                     key={um.id}
@@ -261,6 +270,15 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
 
                     {showReview && (
                       <DrawReviewPanel draw={latestDraw} onUpdate={loadProject} />
+                    )}
+
+                    {showManualPay && (
+                      <ManualPaymentPanel
+                        unitMilestoneId={um.id}
+                        milestoneName={um.milestone.name}
+                        amount={Number(um.milestone.amountPerUnit)}
+                        onUpdate={loadProject}
+                      />
                     )}
 
                     {!isContractor && !showReview && latestDraw?.photos.length ? (

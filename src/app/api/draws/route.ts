@@ -144,7 +144,100 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { drawId, action, ownerNotes, paymentMethod, paymentReference, paymentNotes } = body;
+  const {
+    drawId,
+    unitMilestoneId,
+    action,
+    ownerNotes,
+    paymentMethod,
+    paymentReference,
+    paymentNotes,
+  } = body;
+
+  if (action === "manual_pay") {
+    if (!unitMilestoneId) {
+      return NextResponse.json({ error: "unitMilestoneId is required" }, { status: 400 });
+    }
+
+    const unitMilestone = await prisma.unitMilestone.findUnique({
+      where: { id: unitMilestoneId },
+      include: {
+        milestone: true,
+        unit: { include: { project: true } },
+      },
+    });
+
+    if (!unitMilestone) {
+      return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
+    }
+
+    const project = unitMilestone.unit.project;
+
+    if (user.id !== project.ownerId) {
+      return NextResponse.json({ error: "Only the owner can record payments" }, { status: 403 });
+    }
+
+    if (!["READY", "APPROVED"].includes(unitMilestone.status)) {
+      return NextResponse.json(
+        { error: "This milestone cannot be paid in its current state" },
+        { status: 400 }
+      );
+    }
+
+    const pendingDraw = await prisma.drawRequest.findFirst({
+      where: {
+        unitMilestoneId,
+        status: { in: ["SUBMITTED", "APPROVED"] },
+      },
+    });
+
+    if (pendingDraw) {
+      return NextResponse.json(
+        { error: "A draw request is pending review — approve and pay it instead" },
+        { status: 400 }
+      );
+    }
+
+    const now = new Date();
+    const amount = unitMilestone.milestone.amountPerUnit;
+
+    const draw = await prisma.$transaction(async (tx) => {
+      const manualDraw = await tx.drawRequest.create({
+        data: {
+          unitMilestoneId,
+          requesterId: user.id,
+          reviewerId: user.id,
+          amount,
+          status: "PAID",
+          ownerNotes: ownerNotes || "Manual payment recorded by owner",
+          submittedAt: now,
+          reviewedAt: now,
+        },
+      });
+
+      await tx.payment.create({
+        data: {
+          drawRequestId: manualDraw.id,
+          recordedById: user.id,
+          amount,
+          method: paymentMethod || "Other",
+          reference: paymentReference,
+          notes: paymentNotes || "Manual payment — no contractor draw request",
+        },
+      });
+
+      await tx.unitMilestone.update({
+        where: { id: unitMilestoneId },
+        data: { status: "PAID" },
+      });
+
+      return manualDraw;
+    });
+
+    await unlockNextMilestone(unitMilestoneId);
+
+    return NextResponse.json({ success: true, status: "PAID", drawId: draw.id });
+  }
 
   const draw = await prisma.drawRequest.findUnique({
     where: { id: drawId },
